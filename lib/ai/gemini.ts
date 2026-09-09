@@ -52,24 +52,46 @@ async function generate(systemPrompt: string, contents: Array<{ role: string; pa
     generationConfig: { responseMimeType: "application/json", temperature: 0.8 },
   };
 
+  // Gemini API thỉnh thoảng bị treo/phản hồi rất chậm (hiếm nhưng có với mọi API AI) — fetch() mặc
+  // định không có timeout, nên nếu không tự hủy sau vài giây, request có thể "treo" hàng chục giây
+  // thay vì báo lỗi sớm để còn thử lại. TIMEOUT_MS đủ rộng cho 1 lượt sinh câu trả lời bình thường.
+  const TIMEOUT_MS = 8_000;
   const maxAttempts = 3;
   let res: Response | undefined;
   let lastDetail = "";
+  let timedOut = false;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.status !== 503) break;
+    timedOut = false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, TIMEOUT_MS);
     try {
-      const errJson = await res.json();
-      lastDetail = errJson?.error?.message || "";
-    } catch {}
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (!timedOut) throw e;
+      res = undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res && res.status !== 503) break;
+    if (res && res.status === 503) {
+      try {
+        const errJson = await res.json();
+        lastDetail = errJson?.error?.message || "";
+      } catch {}
+    }
+    if (timedOut) lastDetail = "Gemini phản hồi quá chậm (quá 10 giây).";
     if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, attempt * 1200));
   }
 
-  if (!res) throw new Error("Không kết nối được tới Gemini API.");
+  if (!res) throw new Error(`Gemini không phản hồi kịp sau ${maxAttempts} lần thử. ${lastDetail}`);
 
   if (!res.ok) {
     let detail = lastDetail;

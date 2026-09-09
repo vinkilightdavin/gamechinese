@@ -7,6 +7,7 @@ import { getAppSettings } from "@/lib/settings";
 import { clamp } from "@/lib/validation";
 
 const MAX_IDEA_LEN = 200;
+export const maxDuration = 30;
 
 export async function POST(request: Request) {
   const profile = await getCurrentUserProfile();

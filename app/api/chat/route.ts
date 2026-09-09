@@ -7,6 +7,10 @@ import { checkAndIncrementUsage, UsageLimitError } from "@/lib/usage";
 const MAX_TURNS = 40;
 const MAX_TURN_LEN = 4000;
 
+// Gemini có timeout 8s/lần thử, tối đa 3 lần thử + backoff — dư sức chạy hết trong 30s, tránh bị
+// nền tảng Vercel tự cắt ngang giữa chừng (mặc định ngắn hơn nếu không khai báo rõ).
+export const maxDuration = 30;
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const npcId = body?.npcId as string | undefined;
