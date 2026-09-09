@@ -19,11 +19,19 @@ function bootGame() {
 
   const config = {
     type: Phaser.AUTO,
-    width: 960,
-    height: 600,
     parent: "game-container",
     backgroundColor: "#1a1410",
     pixelArt: true, // giữ nét cho tile 16x16 phóng to, không bị mờ (nearest-neighbor thay vì làm mượt)
+    // RESIZE: canvas lấp đầy đúng kích thước #game-container (toàn màn hình) thay vì cố định
+    // 960x600 rồi co lại bằng CSS — trên điện thoại dọc, màn hình cao sẽ được tận dụng hết thay vì
+    // để thừa 1 dải đen lớn trên/dưới. Các scene tự đọc this.scale.width/height (đã viết theo kiểu
+    // responsive từ đầu) nên tự thích ứng theo kích thước thật của từng máy.
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      parent: "game-container",
+      width: "100%",
+      height: "100%",
+    },
     physics: {
       default: "arcade",
       arcade: { debug: false },

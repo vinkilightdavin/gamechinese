@@ -878,6 +878,14 @@ class ZoneScene extends Phaser.Scene {
 
     const theme = themeOf(zone.themeId);
 
+    // Tọa độ nhân vật/vật cản đều được thiết kế/lưu theo khung tham chiếu 960x600 — quy đổi sang
+    // kích thước canvas THẬT (đổi theo từng máy nhờ Scale.RESIZE) để không bị lệch/tràn màn hình
+    // trên điện thoại (canvas có thể cao hơn hẳn 600 hoặc hẹp hơn hẳn 960).
+    const sx = width / 960;
+    const sy = height / 600;
+    this.toX = (x) => x * sx;
+    this.toY = (y) => y * sy;
+
     // Sàn nhà — 1 tile đá thật, lặp lại bằng TileSprite (nhẹ, 1 draw call) và nhuộm theo tông màu khu vực.
     this.add.tileSprite(width / 2, height / 2, width, height, "tile-floor").setTileScale(2.5).setTint(theme.floorLight);
 
@@ -892,7 +900,8 @@ class ZoneScene extends Phaser.Scene {
       [560, 460, "tile-tree-alt"],
       [800, 420, "tile-tree"],
     ];
-    propPositions.forEach(([px, py, key]) => {
+    propPositions.forEach(([dx, dy, key]) => {
+      const px = this.toX(dx), py = this.toY(dy);
       this.add.ellipse(px, py + 26, 46, 16, 0x000000, 0.25);
       const prop = this.add.image(px, py, key).setScale(2.6);
       this.physics.add.existing(prop, true);
@@ -911,19 +920,20 @@ class ZoneScene extends Phaser.Scene {
     // NPCs — bỏ qua nhân vật bị từ chối (chủ nhân vật sửa/xóa trong "Quản lý", không hiện trong khu vực)
     this.npcSprites = [];
     zone.npcs.filter((npc) => npc.status !== "rejected").forEach((npc) => {
-      const shadow = this.add.ellipse(npc.x, npc.y + 20, 30, 12, 0x000000, 0.3);
-      const sprite = this.add.image(npc.x, npc.y, pickNpcSpriteKey(npc)).setScale(2.6);
-      const badge = this.add.text(npc.x + 18, npc.y - 24, npc.emoji, { fontSize: "18px" })
+      const nx = this.toX(npc.x), ny = this.toY(npc.y);
+      const shadow = this.add.ellipse(nx, ny + 20, 30, 12, 0x000000, 0.3);
+      const sprite = this.add.image(nx, ny, pickNpcSpriteKey(npc)).setScale(2.6);
+      const badge = this.add.text(nx + 18, ny - 24, npc.emoji, { fontSize: "18px" })
         .setOrigin(0.5)
         .setShadow(0, 1, "#000000", 2);
-      const label = this.add.text(npc.x, npc.y + 34, npc.name, {
+      const label = this.add.text(nx, ny + 34, npc.name, {
         fontSize: "13px",
         color: "#fff",
         backgroundColor: "#00000088",
         padding: { x: 6, y: 2 },
       }).setOrigin(0.5);
       const promptText = npc.status === "pending" ? "💬 Click để trò chuyện · ⏳ Chờ duyệt" : "💬 Click để trò chuyện";
-      const prompt = this.add.text(npc.x, npc.y - 46, promptText, {
+      const prompt = this.add.text(nx, ny - 46, promptText, {
         fontSize: "12px",
         color: npc.status === "pending" ? "#ffb84d" : "#ffe9a8",
         backgroundColor: "#000000aa",
@@ -935,7 +945,7 @@ class ZoneScene extends Phaser.Scene {
       sprite.on("pointerover", () => sprite.setTint(0xdddddd));
       sprite.on("pointerout", () => sprite.clearTint());
 
-      this.npcSprites.push({ npc, sprite, shadow, badge, label, prompt });
+      this.npcSprites.push({ npc, x: nx, y: ny, sprite, shadow, badge, label, prompt });
     });
 
     if (!this.npcSprites.length) {
@@ -978,8 +988,8 @@ class ZoneScene extends Phaser.Scene {
     // Phím E vẫn dùng được như phím tắt khi đứng gần nhân vật (click vẫn hoạt động ở bất kỳ khoảng cách nào).
     let closest = null;
     let closestDist = Infinity;
-    this.npcSprites.forEach(({ npc }) => {
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
+    this.npcSprites.forEach(({ npc, x, y }) => {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y);
       if (dist <= 110 && dist < closestDist) {
         closestDist = dist;
         closest = npc;
@@ -1257,11 +1267,19 @@ function bootGame() {
 
   const config = {
     type: Phaser.AUTO,
-    width: 960,
-    height: 600,
     parent: "game-container",
     backgroundColor: "#1a1410",
     pixelArt: true, // giữ nét cho tile 16x16 phóng to, không bị mờ (nearest-neighbor thay vì làm mượt)
+    // RESIZE: canvas lấp đầy đúng kích thước #game-container (toàn màn hình) thay vì cố định
+    // 960x600 rồi co lại bằng CSS — trên điện thoại dọc, màn hình cao sẽ được tận dụng hết thay vì
+    // để thừa 1 dải đen lớn trên/dưới. Các scene tự đọc this.scale.width/height (đã viết theo kiểu
+    // responsive từ đầu) nên tự thích ứng theo kích thước thật của từng máy.
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      parent: "game-container",
+      width: "100%",
+      height: "100%",
+    },
     physics: {
       default: "arcade",
       arcade: { debug: false },
