@@ -1257,6 +1257,31 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// Mobile (đặc biệt Safari iOS) chỉ cho phép audio.play()/speechSynthesis.speak() chạy nếu nó nằm
+// TRỰC TIẾP trong 1 thao tác chạm của người dùng — nhưng TTS ở đây phải chờ fetch() xong mới play(),
+// nên luôn bị chặn âm thầm (không lỗi, chỉ im lặng) trên điện thoại. Mẹo chuẩn: "mở khóa" bằng 1 lần
+// play() rỗng NGAY trong lần chạm đầu tiên của cả trang — sau đó mọi play() sau này (kể cả sau khi
+// đợi mạng) đều được phép cho tới khi tải lại trang.
+function unlockMobileAudio() {
+  try {
+    const silent = new Audio(
+      "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+    );
+    silent.play().catch(() => {});
+  } catch {}
+  try {
+    if (window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance("");
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    }
+  } catch {}
+  document.removeEventListener("touchstart", unlockMobileAudio, true);
+  document.removeEventListener("pointerdown", unlockMobileAudio, true);
+}
+document.addEventListener("touchstart", unlockMobileAudio, true);
+document.addEventListener("pointerdown", unlockMobileAudio, true);
+
 // Bundle này được chèn động vào trang SAU khi React đã hydrate xong (không phải qua thẻ <script> tĩnh
 // trong HTML gốc), nên sự kiện "DOMContentLoaded" đã bắn từ lâu trước khi code này chạy — chờ nó sẽ
 // không bao giờ khởi tạo được game. DOM (#game-container...) chắc chắn đã sẵn sàng lúc này rồi nên
