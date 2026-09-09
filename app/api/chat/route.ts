@@ -4,6 +4,9 @@ import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { chatWithNpc, type ChatTurn } from "@/lib/ai/gemini";
 import { checkAndIncrementUsage, UsageLimitError } from "@/lib/usage";
 
+const MAX_TURNS = 40;
+const MAX_TURN_LEN = 4000;
+
 export async function POST(request: Request) {
   const profile = await getCurrentUserProfile();
   if (!profile) return NextResponse.json({ error: "Chưa đăng nhập." }, { status: 401 });
@@ -12,9 +15,20 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const npcId = body?.npcId as string | undefined;
   const level = Number(body?.level) || 2;
-  const history = (body?.history as ChatTurn[]) || [];
+  const rawHistory = (body?.history as ChatTurn[]) || [];
 
-  if (!npcId || !Array.isArray(history) || history.length === 0) {
+  if (!npcId || !Array.isArray(rawHistory) || rawHistory.length === 0) {
+    return NextResponse.json({ error: "Thiếu dữ liệu." }, { status: 400 });
+  }
+
+  // Cắt bớt để tránh 1 request duy nhất bơm quá nhiều token vào Gemini (vẫn tính là 1 tin
+  // trong hạn mức/ngày, nên giới hạn số lượt + độ dài mỗi lượt để chặn lạm dụng chi phí).
+  const history: ChatTurn[] = rawHistory
+    .slice(-MAX_TURNS)
+    .filter((t) => t && (t.role === "user" || t.role === "model"))
+    .map((t) => ({ role: t.role, text: String(t.text ?? "").slice(0, MAX_TURN_LEN) }));
+
+  if (history.length === 0) {
     return NextResponse.json({ error: "Thiếu dữ liệu." }, { status: 400 });
   }
 

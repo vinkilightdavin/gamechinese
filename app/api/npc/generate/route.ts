@@ -4,6 +4,9 @@ import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { generateCharacterProfile } from "@/lib/ai/gemini";
 import { countUserNpcs } from "@/lib/usage";
 import { getAppSettings } from "@/lib/settings";
+import { clamp } from "@/lib/validation";
+
+const MAX_IDEA_LEN = 200;
 
 export async function POST(request: Request) {
   const profile = await getCurrentUserProfile();
@@ -12,7 +15,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const zoneId = body?.zoneId as string | undefined;
-  const idea = String(body?.idea || "").trim();
+  const idea = clamp(body?.idea, MAX_IDEA_LEN);
   const level = Number(body?.level) || 2;
   if (!zoneId || !idea) return NextResponse.json({ error: "Thiếu dữ liệu." }, { status: 400 });
 

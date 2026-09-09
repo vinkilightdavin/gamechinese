@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { countUserNpcs } from "@/lib/usage";
 import { getAppSettings } from "@/lib/settings";
+import { clamp, NPC_FIELD_LIMITS as L } from "@/lib/validation";
 
 const PALETTE = [0xb5651d, 0xd6538f, 0x4a90d9, 0x5fb95f, 0x9b59b6, 0xe0a030];
 
@@ -14,15 +15,15 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const zoneId = body?.zoneId as string | undefined;
-  const name = String(body?.name || "").trim();
-  const nameZh = String(body?.nameZh || "").trim();
-  const emoji = String(body?.emoji || "🙂").trim() || "🙂";
+  const name = clamp(body?.name, L.name);
+  const nameZh = clamp(body?.nameZh, L.nameZh);
+  const emoji = clamp(body?.emoji, L.emoji) || "🙂";
   const gender = body?.gender === "female" ? "female" : "male";
-  const role = String(body?.role || "").trim();
-  const goal = String(body?.goal || "").trim();
-  const greetingZh = String(body?.greeting?.zh || "").trim();
-  const greetingPinyin = String(body?.greeting?.pinyin || "").trim();
-  const greetingVi = String(body?.greeting?.vi || "").trim();
+  const role = clamp(body?.role, L.role);
+  const goal = clamp(body?.goal, L.goal);
+  const greetingZh = clamp(body?.greeting?.zh, L.greeting);
+  const greetingPinyin = clamp(body?.greeting?.pinyin, L.greeting);
+  const greetingVi = clamp(body?.greeting?.vi, L.greeting);
 
   if (!zoneId || !name || !nameZh || !greetingZh) {
     return NextResponse.json({ error: "Thiếu thông tin nhân vật." }, { status: 400 });

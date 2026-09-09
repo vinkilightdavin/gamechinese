@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { clamp, NPC_FIELD_LIMITS as L } from "@/lib/validation";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentUserProfile();
   if (!profile) return NextResponse.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (profile.status === "locked") return NextResponse.json({ error: "Tài khoản đã bị khóa." }, { status: 403 });
 
   const { id } = await params;
   const admin = createAdminClient();
@@ -17,15 +19,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const body = await request.json().catch(() => null);
   const update: Record<string, unknown> = {
-    name: String(body?.name || "").trim(),
-    name_zh: String(body?.nameZh || "").trim(),
-    emoji: String(body?.emoji || "🙂").trim() || "🙂",
+    name: clamp(body?.name, L.name),
+    name_zh: clamp(body?.nameZh, L.nameZh),
+    emoji: clamp(body?.emoji, L.emoji) || "🙂",
     gender: body?.gender === "female" ? "female" : "male",
-    role: String(body?.role || "").trim(),
-    goal: String(body?.goal || "").trim(),
-    greeting_zh: String(body?.greeting?.zh || "").trim(),
-    greeting_pinyin: String(body?.greeting?.pinyin || "").trim(),
-    greeting_vi: String(body?.greeting?.vi || "").trim(),
+    role: clamp(body?.role, L.role),
+    goal: clamp(body?.goal, L.goal),
+    greeting_zh: clamp(body?.greeting?.zh, L.greeting),
+    greeting_pinyin: clamp(body?.greeting?.pinyin, L.greeting),
+    greeting_vi: clamp(body?.greeting?.vi, L.greeting),
   };
   if (!update.name || !update.name_zh || !update.greeting_zh) {
     return NextResponse.json({ error: "Thiếu thông tin nhân vật." }, { status: 400 });
@@ -45,6 +47,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentUserProfile();
   if (!profile) return NextResponse.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (profile.status === "locked") return NextResponse.json({ error: "Tài khoản đã bị khóa." }, { status: 403 });
 
   const { id } = await params;
   const admin = createAdminClient();
