@@ -40,6 +40,7 @@ function initSettingsUI() {
   const voiceHint = document.getElementById("voice-hint");
 
   let voicesLoaded = false;
+  let loadVoicesPromise = null;
 
   function fillVoiceSelect(select, voices, current) {
     select.innerHTML = "";
@@ -53,7 +54,12 @@ function initSettingsUI() {
     if (current && voices.some((v) => v.name === current)) select.value = current;
   }
 
-  async function loadVoices() {
+  function loadVoices() {
+    if (!loadVoicesPromise) loadVoicesPromise = doLoadVoices();
+    return loadVoicesPromise;
+  }
+
+  async function doLoadVoices() {
     if (voicesLoaded) return;
     voiceHint.textContent = "Đang tải danh sách giọng...";
     try {
@@ -102,4 +108,10 @@ function initSettingsUI() {
     });
     closeModal();
   });
+
+  // Tự tải + chọn sẵn giọng Google TTS ngay khi vào game — không đợi người chơi tự mở "Cài đặt".
+  // Nếu không làm vậy, voiceMale/voiceFemale để trống mặc định khiến TTSClient âm thầm rơi về giọng
+  // máy (Web Speech API) cho MỌI tin nhắn — trên nhiều điện thoại Android không có sẵn gói giọng đọc
+  // tiếng Trung nên hoàn toàn im lặng, không có lỗi gì để nhận biết.
+  loadVoices();
 }

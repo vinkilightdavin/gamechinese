@@ -281,6 +281,7 @@ function initSettingsUI() {
   const voiceHint = document.getElementById("voice-hint");
 
   let voicesLoaded = false;
+  let loadVoicesPromise = null;
 
   function fillVoiceSelect(select, voices, current) {
     select.innerHTML = "";
@@ -294,7 +295,12 @@ function initSettingsUI() {
     if (current && voices.some((v) => v.name === current)) select.value = current;
   }
 
-  async function loadVoices() {
+  function loadVoices() {
+    if (!loadVoicesPromise) loadVoicesPromise = doLoadVoices();
+    return loadVoicesPromise;
+  }
+
+  async function doLoadVoices() {
     if (voicesLoaded) return;
     voiceHint.textContent = "Đang tải danh sách giọng...";
     try {
@@ -343,6 +349,12 @@ function initSettingsUI() {
     });
     closeModal();
   });
+
+  // Tự tải + chọn sẵn giọng Google TTS ngay khi vào game — không đợi người chơi tự mở "Cài đặt".
+  // Nếu không làm vậy, voiceMale/voiceFemale để trống mặc định khiến TTSClient âm thầm rơi về giọng
+  // máy (Web Speech API) cho MỌI tin nhắn — trên nhiều điện thoại Android không có sẵn gói giọng đọc
+  // tiếng Trung nên hoàn toàn im lặng, không có lỗi gì để nhận biết.
+  loadVoices();
 }
 // Trạng thái dùng chung giữa các scene + HUD động + modal tạo khu vực/nhân vật (gọi API server).
 
@@ -881,10 +893,13 @@ class ZoneScene extends Phaser.Scene {
     // Tọa độ nhân vật/vật cản đều được thiết kế/lưu theo khung tham chiếu 960x600 — quy đổi sang
     // kích thước canvas THẬT (đổi theo từng máy nhờ Scale.RESIZE) để không bị lệch/tràn màn hình
     // trên điện thoại (canvas có thể cao hơn hẳn 600 hoặc hẹp hơn hẳn 960).
-    const sx = width / 960;
-    const sy = height / 600;
-    this.toX = (x) => x * sx;
-    this.toY = (y) => y * sy;
+    // Dùng 1 tỉ lệ ĐỒNG NHẤT cho cả 2 trục (không co giãn x/y riêng biệt) — nếu không, màn hình dọc
+    // (hẹp ngang, cao dọc) sẽ bóp khoảng cách ngang giữa các nhân vật lại quá gần nhau, đè lên tên.
+    const s = Math.min(width / 960, height / 600);
+    const offsetX = (width - 960 * s) / 2;
+    const offsetY = (height - 600 * s) / 2;
+    this.toX = (x) => offsetX + x * s;
+    this.toY = (y) => offsetY + y * s;
 
     // Sàn nhà — 1 tile đá thật, lặp lại bằng TileSprite (nhẹ, 1 draw call) và nhuộm theo tông màu khu vực.
     this.add.tileSprite(width / 2, height / 2, width, height, "tile-floor").setTileScale(2.5).setTint(theme.floorLight);
@@ -910,7 +925,7 @@ class ZoneScene extends Phaser.Scene {
     });
 
     // Người chơi
-    this.player = this.physics.add.image(width / 2, height - 60, "tile-player").setScale(2.6);
+    this.player = this.physics.add.image(this.toX(480), this.toY(540), "tile-player").setScale(2.6);
     this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 20, 30, 12, 0x000000, 0.3);
     this.player.body.setSize(12, 8).setOffset(2, 34);
     this.player.body.setCollideWorldBounds(true);
