@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
-import { getAppSettings } from "@/lib/settings";
+import { getAppSettings, invalidateAppSettingsCache } from "@/lib/settings";
 
 export async function GET() {
   const profile = await getCurrentUserProfile();
@@ -27,5 +27,6 @@ export async function PATCH(request: Request) {
     { key: "max_characters_per_user", value: String(maxCharactersPerUser) },
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  invalidateAppSettingsCache();
   return NextResponse.json({ success: true });
 }

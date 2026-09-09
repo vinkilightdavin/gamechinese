@@ -8,10 +8,6 @@ const MAX_TURNS = 40;
 const MAX_TURN_LEN = 4000;
 
 export async function POST(request: Request) {
-  const profile = await getCurrentUserProfile();
-  if (!profile) return NextResponse.json({ error: "Chưa đăng nhập." }, { status: 401 });
-  if (profile.status === "locked") return NextResponse.json({ error: "Tài khoản đã bị khóa." }, { status: 403 });
-
   const body = await request.json().catch(() => null);
   const npcId = body?.npcId as string | undefined;
   const level = Number(body?.level) || 2;
@@ -32,8 +28,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Thiếu dữ liệu." }, { status: 400 });
   }
 
+  // Xác thực người dùng và tra nhân vật không phụ thuộc nhau — chạy song song thay vì nối tiếp để
+  // đỡ 1 vòng round-trip mạng (mỗi lượt DB đều tốn thời gian đáng kể do Supabase ở xa Vercel).
   const supabase = await createClient();
-  const { data: npc } = await supabase.from("npcs").select("name, name_zh, role, goal, status, created_by").eq("id", npcId).single();
+  const [profile, { data: npc }] = await Promise.all([
+    getCurrentUserProfile(),
+    supabase.from("npcs").select("name, name_zh, role, goal, status, created_by").eq("id", npcId).single(),
+  ]);
+
+  if (!profile) return NextResponse.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (profile.status === "locked") return NextResponse.json({ error: "Tài khoản đã bị khóa." }, { status: 403 });
+
   if (!npc || (npc.status !== "published" && npc.created_by !== profile.id)) {
     return NextResponse.json({ error: "Không tìm thấy nhân vật." }, { status: 404 });
   }
