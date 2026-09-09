@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppSettings } from "@/lib/settings";
 import PendingNpcsList from "./PendingNpcsList";
 import SettingsForm from "./SettingsForm";
+import UsersList from "./UsersList";
 
 export default async function AdminPage() {
   const profile = await getCurrentUserProfile();
@@ -51,6 +52,11 @@ export default async function AdminPage() {
 
   const settings = await getAppSettings();
 
+  const { data: usersRaw } = await admin
+    .from("profiles")
+    .select("id, email, display_name, role, status, created_at")
+    .order("created_at", { ascending: false });
+
   return (
     <div className="min-h-screen bg-[#1a1410] text-white p-8">
       <div className="flex items-center justify-between mb-6">
@@ -65,9 +71,14 @@ export default async function AdminPage() {
         <SettingsForm initialMaxMessages={settings.maxMessagesPerDay} initialMaxCharacters={settings.maxCharactersPerUser} />
       </section>
 
-      <section>
+      <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">Nhân vật chờ duyệt ({pendingNpcs.length})</h2>
         <PendingNpcsList initialNpcs={pendingNpcs} />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Người dùng ({usersRaw?.length ?? 0})</h2>
+        <UsersList initialUsers={usersRaw ?? []} currentUserId={profile.id} />
       </section>
     </div>
   );
