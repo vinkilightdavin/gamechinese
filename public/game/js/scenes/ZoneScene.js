@@ -98,9 +98,37 @@ class ZoneScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.props);
 
     // NPCs — bỏ qua nhân vật bị từ chối (chủ nhân vật sửa/xóa trong "Quản lý", không hiện trong khu vực)
+    // Vị trí lưu theo khung 960x600 khi thu nhỏ về màn hình hẹp (điện thoại dọc) có thể dồn quá gần
+    // nhau, đè lên tên — chạy thêm 1 bước "đẩy giãn" các nhân vật đứng gần nhau ra xa tối thiểu
+    // MIN_NPC_DIST, rồi mới kẹp lại trong vùng an toàn của màn hình.
+    const npcPositions = zone.npcs
+      .filter((npc) => npc.status !== "rejected")
+      .map((npc) => ({ npc, x: this.toX(npc.x), y: this.toY(npc.y) }));
+
+    const MIN_NPC_DIST = 130;
+    for (let iter = 0; iter < 6; iter++) {
+      for (let i = 0; i < npcPositions.length; i++) {
+        for (let j = i + 1; j < npcPositions.length; j++) {
+          const a = npcPositions[i], b = npcPositions[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy) || 0.01;
+          if (dist < MIN_NPC_DIST) {
+            const push = (MIN_NPC_DIST - dist) / 2;
+            const ux = dx / dist, uy = dy / dist;
+            a.x -= ux * push; a.y -= uy * push;
+            b.x += ux * push; b.y += uy * push;
+          }
+        }
+      }
+    }
+    const marginX = 60, marginTop = 110, marginBottom = 80;
+    npcPositions.forEach((p) => {
+      p.x = Phaser.Math.Clamp(p.x, marginX, width - marginX);
+      p.y = Phaser.Math.Clamp(p.y, marginTop, height - marginBottom);
+    });
+
     this.npcSprites = [];
-    zone.npcs.filter((npc) => npc.status !== "rejected").forEach((npc) => {
-      const nx = this.toX(npc.x), ny = this.toY(npc.y);
+    npcPositions.forEach(({ npc, x: nx, y: ny }) => {
       const shadow = this.add.ellipse(nx, ny + 20, 30, 12, 0x000000, 0.3);
       const sprite = this.add.image(nx, ny, pickNpcSpriteKey(npc)).setScale(2.6);
       const badge = this.add.text(nx + 18, ny - 24, npc.emoji, { fontSize: "18px" })
