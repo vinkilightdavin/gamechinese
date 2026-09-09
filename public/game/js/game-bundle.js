@@ -1079,6 +1079,7 @@ class WorldMapScene extends Phaser.Scene {
     if (canAddZone) this.drawEmptyPlot(positions[zones.length].x, positions[zones.length].y);
 
     this.cameras.main.setBounds(0, 0, width, worldHeight);
+    this.setupDragScroll(width, height, worldHeight);
     this.setupScrollControls(width, height, worldHeight);
 
     // Tiêu đề ghim cố định trên màn hình (không cuộn theo bản đồ)
@@ -1088,6 +1089,31 @@ class WorldMapScene extends Phaser.Scene {
       backgroundColor: "#00000055",
       padding: { x: 12, y: 6 },
     }).setOrigin(0.5).setDepth(20).setScrollFactor(0);
+  }
+
+  // Vuốt để cuộn (chạm/kéo trên điện thoại, hoặc kéo bằng chuột) — theo dõi độ dịch chuyển từ lúc
+  // chạm xuống, chỉ coi là "kéo" khi vượt ngưỡng nhỏ để không đụng độ với việc chạm-để-vào-khu-vực
+  // (các nơi bấm được sẽ tự kiểm tra cờ isDragging này trước khi xử lý ở pointerup).
+  setupDragScroll(width, height, worldHeight) {
+    const cam = this.cameras.main;
+    const maxScroll = Math.max(0, worldHeight - height);
+    this.isDragging = false;
+    let dragStartY = 0;
+    let dragStartScroll = 0;
+
+    this.input.on("pointerdown", (pointer) => {
+      dragStartY = pointer.y;
+      dragStartScroll = cam.scrollY;
+      this.isDragging = false;
+    });
+    this.input.on("pointermove", (pointer) => {
+      if (!pointer.isDown) return;
+      const dy = pointer.y - dragStartY;
+      if (Math.abs(dy) > 8) this.isDragging = true;
+      if (this.isDragging) {
+        cam.scrollY = Phaser.Math.Clamp(dragStartScroll - dy, 0, maxScroll);
+      }
+    });
   }
 
   // Cuộn camera bằng chuột (wheel) trên desktop và 2 nút mũi tên ghim góc phải cho mọi thiết bị —
@@ -1111,7 +1137,7 @@ class WorldMapScene extends Phaser.Scene {
     upBtn.on("pointerdown", () => { cam.scrollY = Phaser.Math.Clamp(cam.scrollY - step, 0, worldHeight - height); });
     downBtn.on("pointerdown", () => { cam.scrollY = Phaser.Math.Clamp(cam.scrollY + step, 0, worldHeight - height); });
 
-    this.add.text(width / 2, height - 12, "🖱️ Cuộn chuột hoặc bấm ▲▼ để xem thêm khu vực", {
+    this.add.text(width / 2, height - 12, "🖱️ Vuốt/cuộn chuột hoặc bấm ▲▼ để xem thêm khu vực", {
       fontSize: "11px", color: "#e0d9c5", backgroundColor: "#00000066", padding: { x: 6, y: 2 },
     }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(30);
   }
@@ -1187,7 +1213,10 @@ class WorldMapScene extends Phaser.Scene {
     this.add.text(cx, cy + BUILDING_H / 2 + 54, `${zone.npcs.length} nhân vật`, { fontSize: "11px", color: "#e0d9c5" }).setOrigin(0.5);
 
     const hitZone = this.add.zone(cx, cy, BUILDING_W, BUILDING_H).setInteractive({ useHandCursor: true });
-    hitZone.on("pointerdown", () => this.scene.start("ZoneScene", { zoneId: zone.id }));
+    hitZone.on("pointerup", () => {
+      if (this.isDragging) return;
+      this.scene.start("ZoneScene", { zoneId: zone.id });
+    });
     hitZone.on("pointerover", () => container.list.forEach((img) => img.setTint(0xddeeff)));
     hitZone.on("pointerout", () => container.list.forEach((img) => img.clearTint()));
 
@@ -1195,7 +1224,7 @@ class WorldMapScene extends Phaser.Scene {
       const delBtn = this.add.text(cx + BUILDING_W / 2 - 2, topLeftY - 4, "✕", {
         fontSize: "12px", color: "#ffffff", backgroundColor: "#00000088", padding: { x: 5, y: 2 },
       }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(30);
-      delBtn.on("pointerdown", async (pointer, x, y, event) => {
+      delBtn.on("pointerup", async (pointer, x, y, event) => {
         event.stopPropagation();
         if (!confirm(`Xóa khu vực "${zone.name}" và toàn bộ nhân vật trong đó?`)) return;
         try {
@@ -1221,7 +1250,10 @@ class WorldMapScene extends Phaser.Scene {
     this.add.text(cx, cy + boxH / 2 + 30, "Thêm khu vực mới", { fontSize: "13px", color: "#e0d9c5" }).setOrigin(0.5);
 
     plot.setInteractive({ useHandCursor: true });
-    plot.on("pointerdown", () => WorldUI.openZoneModal());
+    plot.on("pointerup", () => {
+      if (this.isDragging) return;
+      WorldUI.openZoneModal();
+    });
     plot.on("pointerover", () => plot.setStrokeStyle(3, 0xffffff, 0.8));
     plot.on("pointerout", () => plot.setStrokeStyle(3, 0xffffff, 0.35));
   }
